@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, Protocol, Literal, Union, Mapping, Any
 
 
@@ -34,8 +34,8 @@ class VLLMConfig:
 class LLMBackendConfig:
     backend_module: Literal["openai", "vllm", "vllm_npu"] = "vllm"
 
-    vllm: VLLMConfig = VLLMConfig()
-    openai: OpenAIConfig = OpenAIConfig()
+    vllm: VLLMConfig = field(default_factory=VLLMConfig())
+    openai: OpenAIConfig = field(default_factory=OpenAIConfig())
 
 
 class Backend(Protocol):

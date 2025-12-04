@@ -61,14 +61,10 @@ def main(cfg: DictConfig):
     del solver_llm, solver_cfg
 
     # Initialize judger
-    judger_engine = parse_engine_config(
-        OmegaConf.to_container(cfg.judger.engine, resolve=True)
-    )
-    judger_sampling = SamplingConfig(
-        **OmegaConf.to_container(cfg.judger.sampling_params, resolve=True)
-    )
-    judger_cfg = AppConfig(engine=judger_engine, sampling=judger_sampling)
-    judger_llm = LLMHost(judger_cfg)
+    judger_sampling = LLMSamplingConfig(cfg.judger.sampling_params)
+    judger_cfg = LLMBackendConfig(cfg.judger.backend)
+    judger_llm = LLMHost(judger_cfg, judger_sampling)
+
     logger.info("Starting judger LLM host")
     judger_llm.start()
 
