@@ -1,0 +1,27 @@
+model_name: "Judge_Model"
+
+host: ""
+port: ""
+
+backend:
+  backend_module: "vllm"  # vllm | vllm_npu | openai
+  vllm:
+    model: ""
+    tokenizer: null
+    dtype: "auto"
+    tensor_parallel_size: 1
+    max_model_len: null
+    gpu_memory_utilization: 0.9
+    trust_remote_code: true
+    enforce_eager: false
+    device: "auto"
+  openai:
+    model: ""
+    api_key: null
+    base_url: null
+
+sampling_params:
+  temperature: 0.7
+  top_p: 0.95
+  top_k: -1
+  max_tokens: 2048

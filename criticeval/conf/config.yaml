@@ -1,0 +1,18 @@
+defaults:
+  - _self_
+  - judger: judger
+  - solver: solver
+
+paths:
+  data_dir: ""
+  save_dir: "../outputs"
+  templates_dir: "../templates"
+
+data:
+  problems_files: ["problems.csv"]
+
+template:
+  solver_template: "base_solver.jinja"
+  judger_template: "base_judger.jinja"
+  use_extract_answer: true
+  extract_answer_func: "boxed_answer_extractor"

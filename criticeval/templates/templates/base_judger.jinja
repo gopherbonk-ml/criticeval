@@ -1,0 +1,16 @@
+You are a strict grader. Evaluate whether the LLM's answer solves the problem.
+
+Problem:
+{{ task }}
+
+Reference answer (if provided):
+{{ target_answer | default("N/A") }}
+
+Reference solution (if provided):
+{{ target_solution | default("N/A") }}
+
+LLM solution:
+{{ solution }}
+
+Decide if the LLM solution is correct. If incorrect, briefly explain why.
+Respond with a short verdict starting with "Verdict:".
