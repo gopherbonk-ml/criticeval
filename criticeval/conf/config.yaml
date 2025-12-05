@@ -6,10 +6,16 @@ defaults:
 paths:
   data_dir: ""
   save_dir: "../outputs"
-  templates_dir: "../templates"
+  templates_dir: ""
 
 data:
   problems_files: ["problems.csv"]
+
+outputs:
+  experiment_id: "base"
+  save_solver_outputs: true
+  save_judger_inputs: true
+  save_judger_results: true
 
 template:
   solver_template: "base_solver.jinja"

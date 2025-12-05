@@ -27,6 +27,31 @@ class Solution:
 
 
 @dataclass
+class SolverOutput:
+    # Meta Problem Info
+    source: Optional[str] = None
+    topic: Optional[str] = None
+    difficulty: Optional[int] = None
+
+    # Meta Solver Info
+    solver_model_name: Optional[str] = None
+    solver_temperute: Optional[float] = None
+    solver_top_p: Optional[float] = None
+    solver_top_k: Optional[int] = None
+    solver_max_tokens: Optional[int] = None
+
+    # Core Problem
+    task: str = ""
+    images: Optional[List[str]] = field(default_factory=list)
+    target_solution: Optional[str] = None
+    target_answer: Optional[str] = None
+
+    # LLM Solution
+    llm_solution: str = ""
+    llm_answer: str = ""
+
+
+@dataclass
 class JudgerInput:
     problem: Problem
     llm_solution: Solution
@@ -59,6 +84,7 @@ class Results:
 
     judger_input: str = ""
     judger_output: str = ""
+    judger_assesment: str = ""
 
 
 @dataclass

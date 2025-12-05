@@ -5,7 +5,7 @@ def import_backend_module(name: str):
         return importlib.import_module("vllm")
     if name == "vllm_npu":
         import importlib
-        return importlib.import_module("vllm_npu")
+        return importlib.import_module("vllm_ascend")
     raise ValueError(f"Unknown backend module: {name}")
 
 

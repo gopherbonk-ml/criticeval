@@ -1,25 +1,24 @@
 from typing import Optional
 
-from .model_api import LLMBackendConfig, LLMSamplingConfig
+from .model_api import VLLMConfig, LLMSamplingConfig
 from .utils import import_backend_module, detect_device, empty_cashe
+
+import vllm
+import os
+import ray
 
 
 class VLLMBackend:
-    def __init__(self, engine_cfg: LLMBackendConfig, sampling_cfg: LLMSamplingConfig):
+    def __init__(self, engine_cfg: VLLMConfig, sampling_cfg: LLMSamplingConfig):
         self.engine_cfg = engine_cfg
         self.sampling_cfg = sampling_cfg
         self.llm = None
         self.sampling_params = None
+        print(os.getenv("ASCEND_RT_VISIBLE_DEVICES"))
 
     def start(self):
-        backend = import_backend_module(self.engine_cfg.backend_module)
-        LLM = getattr(backend, "LLM", None)
-        if LLM is None:
-            raise RuntimeError("LLM")
-        
-        SamplingParamsCls = getattr(backend, "SamplingParams", None)
-        if SamplingParamsCls is None:
-            raise RuntimeError("SamplingParamCls")
+        LLM = vllm.LLM
+        SamplingParamsCls = vllm.SamplingParams
         
         device = detect_device(self.engine_cfg.device)
 
@@ -28,7 +27,7 @@ class VLLMBackend:
             "tokenizer": self.engine_cfg.tokenizer,
             "dtype": self.engine_cfg.dtype,
             "tensor_parallel_size": self.engine_cfg.tensor_parallel_size,
-            "max_model_len": self.engine_cfg.max_model_len,
+            "max_model_len": self.engine_cfg.max_model_length,
             "gpu_memory_utilization": self.engine_cfg.gpu_memory_utilization,
             "trust_remote_code": self.engine_cfg.trust_remote_code,
             "enforce_eager": self.engine_cfg.enforce_eager,
@@ -37,10 +36,10 @@ class VLLMBackend:
         engine_args = {k: v for k, v in engine_args.items() if v is not None}
 
         sampling_args = {
-            "temperature": self.sampling_params.temperature,
-            "top_p": self.sampling_params.top_p,
-            "top_k": self.sampling_params.top_k,
-            "max_tokens": self.sampling_params.max_tokens,
+            "temperature": self.sampling_cfg.temperature,
+            "top_p": self.sampling_cfg.top_p,
+            "top_k": self.sampling_cfg.top_k,
+            "max_tokens": self.sampling_cfg.max_tokens,
         }
         sampling_args = {k: v for k, v in sampling_args.items() if v is not None}
 
@@ -55,7 +54,7 @@ class VLLMBackend:
         if self.llm is None or self.sampling_params is None:
             raise RuntimeError("vLLM backend not started. Call start() before generate().")
         if images:
-            outputs = self.llm([prompt], self.sampling_cfg, images=images)
+            outputs = self.llm.generate([prompt], self.sampling_params, images=images)
         else:
-            outputs = self.llm([prompt], self.sampling_cfg)
+            outputs = self.llm.generate([prompt], self.sampling_params)
         return outputs[0].outputs[0].text

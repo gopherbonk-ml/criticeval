@@ -30,7 +30,7 @@ class OpenAIChatLLM:
     def stop():
         pass
 
-    def generate(self, prompts: List[str], sampling_params: SamplingConfig, images: Optional[list[str]] = None):
+    def generate(self, prompts: List[str], sampling_params: LLMSamplingConfig, images: Optional[list[str]] = None):
         results = []
         for prompt in prompts:
             try:

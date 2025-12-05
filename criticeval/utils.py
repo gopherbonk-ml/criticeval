@@ -5,6 +5,7 @@ import csv
 from pathlib import Path
 import pandas as pd
 from .structure import Problem, Results
+from dataclasses import asdict
 
 
 logger = logging.getLogger("criticeval.utils")
@@ -48,23 +49,21 @@ def save_results(output_dir: str, results: list[Results]):
     outp = Path(output_dir)
     outp.mkdir(parents=True, exist_ok=True)
 
-    # JSONL
-    with open(outp / "results.jsonl", "w", encoding="utf-8") as f:
-        for r in results:
-            f.write(json.dumps({
-                "problem": asdict(r.problem),
-                "llm_solution": asdict(r.llm_solution),
-                "judger_input": r.judger_input,
-                "judger_output": r.judger_output,
-            }, ensure_ascii=False) + "\n")
+    serialized = []
+    for r in results:
+        serialized.append({
+            "problem": asdict(r.problem),
+            "llm_solution": asdict(r.llm_solution),
+            "judger_input": r.judger_input,
+            "judger_output": r.judger_output,
+        })
 
-    # CSV summary
-    with open(outp / "summary.csv", "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["problem_task", "answer", "judger_output"])
-        writer.writeheader()
-        for r in results:
-            writer.writerow({
-                "problem_task": getattr(r.problem, "task", ""),
-                "answer": getattr(r.llm_solution, "answer", ""),
-                "judger_output": r.judger_output,
-            })
+    # JSONL
+    with open(outp / "results.json", "w", encoding="utf-8") as f:
+        json.dump(
+            serialized,
+            f,
+            ensure_ascii=False,  # чтобы не было \u041f\u0440...
+            indent=2,            # красивые отступы
+            sort_keys=True       # опционально: сортировка ключей
+        )

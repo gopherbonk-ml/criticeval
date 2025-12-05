@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Optional, Protocol, Literal, Union, Mapping, Any
+import ray
 
 
 @dataclass
@@ -13,8 +14,8 @@ class LLMSamplingConfig:
 @dataclass
 class OpenAIConfig:
     model: str = ""
-    api_key: str = Optional[str]
-    base_url: str = Optional[str]
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
 
 
 @dataclass
@@ -23,19 +24,28 @@ class VLLMConfig:
     tokenizer: Optional[str] = None
     dtype: str = "auto"
     tensor_parallel_size: int = 1
-    max_model_len: Optional[int] = None
+    max_model_length: Optional[int] = None
     gpu_memory_utilization: float = 0.9
     trust_remote_code: bool = True
     enforce_eager: bool = False
     device: str = "auto"
+    backend: str = "vllm"  # vllm | vllm_npu
 
 
 @dataclass
 class LLMBackendConfig:
     backend_module: Literal["openai", "vllm", "vllm_npu"] = "vllm"
+    vllm: VLLMConfig = field(default_factory=VLLMConfig)
+    openai: OpenAIConfig = field(default_factory=OpenAIConfig)
 
-    vllm: VLLMConfig = field(default_factory=VLLMConfig())
-    openai: OpenAIConfig = field(default_factory=OpenAIConfig())
+    def __post_init__(self):
+        from collections.abc import Mapping
+
+        if isinstance(self.vllm, Mapping):
+            self.vllm = VLLMConfig(**self.vllm)
+
+        if isinstance(self.openai, Mapping):
+            self.openai = OpenAIConfig(**self.openai)
 
 
 class Backend(Protocol):
@@ -52,19 +62,20 @@ class Backend(Protocol):
 def build_backend(backend_cfg: LLMBackendConfig, sampling_cfg: LLMSamplingConfig):
     if backend_cfg.backend_module in ("vllm", "vllm_npu"):
         from .vllm_backend import VLLMBackend
-
-        return LLMBackendConfig(backend_cfg, sampling_cfg)
+        print(backend_cfg.vllm)
+        return VLLMBackend(backend_cfg.vllm, sampling_cfg)
 
     if backend_cfg.backend_module == "openai":
         from .openai_backend import OpenAIChatBackend
 
-        return LLMBackendConfig(backend_cfg, sampling_cfg)
+        return OpenAIChatBackend(backend_cfg.openai, sampling_cfg)
 
     raise ValueError(f"Unknown backend module: {backend_cfg.backend_module}")
 
 
+@ray.remote
 class LLMHost:
-    def __init__(self, cfg: VLLMConfig, sampling_params: LLMSamplingConfig):
+    def __init__(self, cfg: LLMBackendConfig, sampling_params: LLMSamplingConfig):
         self.cfg = cfg
         self.sampling_params = sampling_params
         self.backend: Optional[Backend] = None

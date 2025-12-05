@@ -6,11 +6,12 @@ port: ""
 backend:
   backend_module: "vllm"  # vllm | vllm_npu | openai
   vllm:
+    backend: "vllm_npu"
     model: ""
     tokenizer: null
     dtype: "auto"
     tensor_parallel_size: 1
-    max_model_len: null
+    max_model_length: null
     gpu_memory_utilization: 0.9
     trust_remote_code: true
     enforce_eager: false
