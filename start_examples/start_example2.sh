@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+export ASCEND_RT_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+export VLLM_LOGGING_LEVEL=ERROR
+
+
+python -m criticeval.eval \
+  evaluation.mode="all" \
+  paths.data_dir="data" \
+  paths.save_dir="outputs" \
+  data.problem_file="math_vista_example.csv" \
+  outputs.experiment_id="basic_example_2" \
+  outputs.save_solver_outputs=True \
+  template.solver_templates=["base_solver"] \
+  template.judger_templates=["base_judger"] \
+  template.use_extract_answer_for_solver=True \
+  template.use_extract_answer_for_judger=True \
+  template.extract_answer_func_for_solver="boxed_answer_extractor" \
+  template.extract_answer_func_for_judger="boxed_answer_extractor" \
+  solver.backend.backend_module="vllm" \
+  solver.backend.vllm.model="/workspace/local/models/Qwen2.5-VL-3B-Instruct" \
+  solver.backend.vllm.dtype="auto" \
+  solver.backend.vllm.device="auto" \
+  solver.backend.vllm.num_devices=1 \
+  solver.backend.vllm.tensor_parallel_size=2 \
+  solver.backend.vllm.max_model_length=8192 \
+  solver.backend.vllm.gpu_memory_utilization=0.6 \
+  solver.backend.vllm.trust_remote_code=True \
+  solver.backend.vllm.enforce_eager=True \
+  solver.backend.vllm.num_devices=1 \
+  solver.sampling_params.temperature=0 \
+  solver.sampling_params.max_tokens=4096 \
+  solver.sampling_params.top_p=0.9 \
+  judger.backend.backend_module="openai" \
+  judger.backend.openai.model="qwen3vl" \
+  judger.backend.openai.api_key="EMPTY" \
+  judger.backend.openai.base_url="http://npu-8800-0.ai.cbg.huawei.com:8000/v1" \
+  judger.sampling_params.temperature=0.6 \
+  judger.sampling_params.max_tokens=4096 \
+  judger.sampling_params.top_p=0.9 \

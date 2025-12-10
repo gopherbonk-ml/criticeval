@@ -3,16 +3,26 @@ defaults:
   - judger: judger
   - solver: solver
 
+evaluation:
+  mode: "all" # options: "all", "solver_only", "judger_only"
+
 paths:
-  data_dir: ""
-  save_dir: "../outputs"
-  templates_dir: "../templates"
+  data_dir: "data"
+  save_dir: "outputs"
 
 data:
-  problems_files: ["problems.csv"]
+  problem_file: "problems.csv"
+  solver_output_file: None
+
+outputs:
+  experiment_id: "base"
+  save_solver_outputs: true
 
 template:
-  solver_template: "base_solver.jinja"
-  judger_template: "base_judger.jinja"
-  use_extract_answer: true
-  extract_answer_func: "boxed_answer_extractor"
+  solver_templates: ["base_solver"]
+  judger_templates: ["base_judger"]
+  use_extract_answer_for_solver: true
+  use_extract_answer_for_judger: true
+  extract_answer_func_for_solver: "boxed_answer_extractor"
+  extract_answer_func_for_judger: "boxed_answer_extractor"
+  use_images_for_judger: True

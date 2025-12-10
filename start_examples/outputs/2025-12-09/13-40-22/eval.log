@@ -1,0 +1,74 @@
+[2025-12-09 13:40:22,615][criticeval][INFO] - CriticEval Configuration:
+[2025-12-09 13:40:22,620][criticeval][INFO] - 
+evaluation:
+  mode: all
+paths:
+  data_dir: data
+  save_dir: outputs
+data:
+  problem_file: problems_example.csv
+  solver_output_file: None
+outputs:
+  experiment_id: example_run
+  save_solver_outputs: true
+template:
+  solver_templates:
+  - base_solver
+  judger_templates:
+  - base_judger
+  use_extract_answer_for_solver: true
+  use_extract_answer_for_judger: true
+  extract_answer_func_for_solver: boxed_answer_extractor
+  extract_answer_func_for_judger: boxed_answer_extractor
+judger:
+  model_name: Judge_Model
+  backend:
+    backend_module: openai
+    vllm:
+      model: ''
+      tokenizer: null
+      dtype: auto
+      num_devices: 1
+      tensor_parallel_size: 1
+      max_model_length: null
+      gpu_memory_utilization: 0.9
+      trust_remote_code: true
+      enforce_eager: false
+      device: auto
+    openai:
+      model: deepseek
+      api_key: sk-18753c5489fe406ca84dc00527df587f
+      base_url: http://lri-deepseek.rnd.huawei.com:8080/
+  sampling_params:
+    temperature: 0.6
+    top_p: 0.9
+    top_k: -1
+    max_tokens: 4096
+solver:
+  model_name: Solver_Model
+  backend:
+    backend_module: vllm
+    vllm:
+      model: /workspace/local/models/Qwen2.5-VL-3B-Instruct
+      tokenizer: null
+      dtype: auto
+      tensor_parallel_size: 2
+      max_model_length: 8192
+      gpu_memory_utilization: 0.6
+      trust_remote_code: true
+      enforce_eager: true
+      device: auto
+      num_devices: 1
+    openai:
+      model: ''
+      api_key: null
+      base_url: null
+  sampling_params:
+    temperature: 0
+    top_p: 0.9
+    top_k: -1
+    max_tokens: 4096
+
+[2025-12-09 13:40:22,621][criticeval.utils][INFO] - Results will be stored in outputs
+[2025-12-09 13:40:22,621][criticeval][INFO] - Starting evaluation in mode: all
+[2025-12-09 13:41:24,323][criticeval][INFO] - Saved solver outputs to outputs/solver_outputs/base/solver_outputs.json

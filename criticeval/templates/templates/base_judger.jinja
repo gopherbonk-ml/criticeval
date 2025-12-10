@@ -3,14 +3,18 @@ You are a strict grader. Evaluate whether the LLM's answer solves the problem.
 Problem:
 {{ task }}
 
-Reference answer (if provided):
-{{ target_answer | default("N/A") }}
-
-Reference solution (if provided):
+Reference solution:
 {{ target_solution | default("N/A") }}
 
+Reference answer:
+{{ target_answer | default("N/A") }}
+
 LLM solution:
-{{ solution }}
+{{ solver_solution | default("N/A") }}
+
+LLM answer:
+
+{{ solver_answer | default("N/A") }}
 
 Decide if the LLM solution is correct. If incorrect, briefly explain why.
-Respond with a short verdict starting with "Verdict:".
+Rate the LLM solution with a binary score (0 or 1), where 0 means the solution is incorrect and 1 means the solution is correct. Place your score (0 or 1) in the \\boxed{}. Example \\boxed{0}

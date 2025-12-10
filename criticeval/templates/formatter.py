@@ -4,7 +4,7 @@ from typing import Optional, Union
 
 from jinja2 import Environment, FileSystemLoader
 
-from ..structure import Problem, Solution
+from ..structure import Problem, SolverOutput
 
 
 DEFAULT_TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
@@ -18,11 +18,11 @@ def _get_env(templates_dir: Optional[Union[str, Path]] = None) -> Environment:
     )
 
 
-def render_solver_prompt(problem: Problem, template_file: str, templates_dir: Optional[Union[str, Path]] = None):
-    template = _get_env(templates_dir).get_template(template_file)
+def render_solver_prompt(problem: Problem, template_file: str):
+    template = _get_env(DEFAULT_TEMPLATES_DIR).get_template(template_file + ".jinja")
     return template.render(**asdict(problem))
 
 
-def render_judger_prompt(problem: Problem, solution: Solution, template_file: str, templates_dir: Optional[Union[str, Path]] = None):
-    template = _get_env(templates_dir).get_template(template_file)
-    return template.render(**asdict(problem), **asdict(solution))
+def render_judger_prompt(solver_output: SolverOutput, template_file: str):
+    template = _get_env(DEFAULT_TEMPLATES_DIR).get_template(template_file + ".jinja")
+    return template.render(**asdict(solver_output))

@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+export ASCEND_RT_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+export HYDRA_FULL_ERROR=1
+export VLLM_LOGGING_LEVEL=DEBUG
+export ASCEND_LAUNCH_BLOCKING=1
+
+
+python -m criticeval.eval \
+  evaluation.mode="judger_only" \
+  paths.data_dir="data" \
+  paths.save_dir="outputs" \
+  data.solver_output_file="solver_outputs.json" \
+  outputs.experiment_id="example_run" \
+  template.judger_templates=["base_judger"] \
+  template.use_extract_answer_for_judger=True \
+  template.extract_answer_func_for_judger="boxed_answer_extractor" \
+  judger.backend.backend_module="openai" \
+  judger.backend.openai.model="qwen3vl" \
+  judger.backend.openai.api_key="EMPTY" \
+  judger.backend.openai.base_url="http://npu-8800-0.ai.cbg.huawei.com:8000/v1" \
+  judger.sampling_params.temperature=0.6 \
+  judger.sampling_params.max_tokens=4096 \
+  judger.sampling_params.top_p=0.9 \

@@ -1,16 +1,14 @@
 model_name: "Judge_Model"
 
-host: ""
-port: ""
-
 backend:
-  backend_module: "vllm"  # vllm | vllm_npu | openai
+  backend_module: "vllm"  # vllm | openai
   vllm:
     model: ""
     tokenizer: null
     dtype: "auto"
+    num_devices: 1
     tensor_parallel_size: 1
-    max_model_len: null
+    max_model_length: null
     gpu_memory_utilization: 0.9
     trust_remote_code: true
     enforce_eager: false
