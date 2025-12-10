@@ -1,0 +1,75 @@
+[2025-12-10 12:25:40,397][criticeval][INFO] - CriticEval Configuration:
+[2025-12-10 12:25:40,403][criticeval][INFO] - 
+evaluation:
+  mode: judger_only
+paths:
+  data_dir: data
+  save_dir: outputs
+data:
+  problem_file: problems.csv
+  solver_output_file: solver_outputs.json
+outputs:
+  experiment_id: example_run
+  save_solver_outputs: true
+template:
+  solver_templates:
+  - base_solver
+  judger_templates:
+  - base_judger
+  use_extract_answer_for_solver: true
+  use_extract_answer_for_judger: true
+  extract_answer_func_for_solver: boxed_answer_extractor
+  extract_answer_func_for_judger: boxed_answer_extractor
+judger:
+  model_name: Judge_Model
+  backend:
+    backend_module: openai
+    vllm:
+      model: ''
+      tokenizer: null
+      dtype: auto
+      num_devices: 1
+      tensor_parallel_size: 1
+      max_model_length: null
+      gpu_memory_utilization: 0.9
+      trust_remote_code: true
+      enforce_eager: false
+      device: auto
+    openai:
+      model: qwen3vl
+      api_key: EMPTY
+      base_url: http://npu-8800-0.ai.cbg.huawei.com:8000/v1
+  sampling_params:
+    temperature: 0.6
+    top_p: 0.9
+    top_k: -1
+    max_tokens: 4096
+solver:
+  model_name: Solver_Model
+  backend:
+    backend_module: vllm
+    vllm:
+      model: ''
+      tokenizer: null
+      dtype: auto
+      tensor_parallel_size: 1
+      max_model_length: null
+      gpu_memory_utilization: 0.9
+      trust_remote_code: true
+      enforce_eager: false
+      device: auto
+      num_devices: 1
+    openai:
+      model: ''
+      api_key: null
+      base_url: null
+  sampling_params:
+    temperature: 0.7
+    top_p: 0.95
+    top_k: -1
+    max_tokens: 2048
+
+[2025-12-10 12:25:40,403][criticeval.utils][INFO] - Results will be stored in outputs
+[2025-12-10 12:25:40,403][criticeval][INFO] - Starting evaluation in mode: judger_only
+[2025-12-10 12:25:55,562][httpx][INFO] - HTTP Request: POST http://npu-8800-0.ai.cbg.huawei.com:8000/v1/chat/completions "HTTP/1.1 200 OK"
+[2025-12-10 12:25:55,580][criticeval][INFO] - Evaluation finished.

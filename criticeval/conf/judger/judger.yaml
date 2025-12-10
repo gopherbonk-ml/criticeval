@@ -1,15 +1,12 @@
 model_name: "Judge_Model"
 
-host: ""
-port: ""
-
 backend:
   backend_module: "vllm"  # vllm | openai
   vllm:
-    backend: "vllm_npu"
     model: ""
     tokenizer: null
     dtype: "auto"
+    num_devices: 1
     tensor_parallel_size: 1
     max_model_length: null
     gpu_memory_utilization: 0.9

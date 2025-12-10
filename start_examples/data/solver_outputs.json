@@ -1,0 +1,22 @@
+[
+    {
+        "source": null,
+        "topic": null,
+        "difficulty": null,
+        "task": "What is 2+2?",
+        "images": [],
+        "target_solution": "Compute 2+2=4",
+        "target_answer": 4,
+        "global_eval_criteria": null,
+        "task_eval_criteria": null,
+        "solver_template_name": "base_solver",
+        "solver_prompt": "Solve the problem step by step and place the final answer in the \\\\boxed{Final Answer}.\n\nFor example, if the answer to the problem was \\sqrt{\\pi}, your answer should look like this: \\\\boxed{\\sqrt{\\pi}}\n\nNow it's your turn to solve this problem.\n\nPROBLEM:\nWhat is 2+2?\n\nYOUR SOLUTION:",
+        "solver_model_name": null,
+        "solver_temperature": 0,
+        "solver_top_p": 0.9,
+        "solver_top_k": -1,
+        "solver_max_tokens": 4096,
+        "solver_solution": "ABOBA!!!",
+        "solver_answer": "Hitler"
+    }
+]

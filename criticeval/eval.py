@@ -1,13 +1,19 @@
 import logging
 from pathlib import Path
 
+import os
+import json
 import hydra
 from hydra.utils import to_absolute_path
 from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
-from typing import List
+from typing import List, Optional, Callable
+import pandas as pd
+from dataclasses import asdict
 
-from .structure import Problem, Solution, SolverOutput, JudgerInput, Results
+from .structure import (
+    Problem, SolverInput, SolverOutput, JudgerInput, JudgerOutput
+)
 from .templates.formatter import render_solver_prompt, render_judger_prompt
 from .serve_model.model_api import (
     LLMHost,
@@ -15,193 +21,363 @@ from .serve_model.model_api import (
     LLMSamplingConfig,
 )
 from .extractors import get_answer_extractor_function
-from .utils import read_input_data, check_or_create_output_dir, save_results
-import multiprocessing as mp
-import ray
+from .utils import read_input_data, check_or_create_output_dir
 
 
 logger = logging.getLogger("criticeval")
 logging.basicConfig(format="[CriticEval] %(message)s")
 
 
-def ray_init():
-    if not ray.is_initialized():
-        # # ray_init_kwargs = {
-        # #     "num_cpus": 32,
-        # #     "num_gpus": 8
-        # # }
-        # # runtime_env_kwargs = {}
-        
-        # # ray_init_kwargs = OmegaConf.create({**ray_init_kwargs, "runtime_env": runtime_env_kwargs})
-        # ray.init(**OmegaConf.to_container(ray_init_kwargs))
-        ray.init()
-    print(f"Availavle Ray Resources: {ray.cluster_resources()}")
+# =====================
+#  IO Helpers
+# =====================
 
 
-def save_solver_outputs(output_dir: str, solver_outputs: List[SolverOutput], experiment_id: str = "base"):
-    outp = Path(output_dir) / f"solver_outputs_{experiment_id}"
-    outp.mkdir(parents=True, exist_ok=True)
+def save_solver_outputs(
+    output_dir: str | Path,
+    solver_outputs: List[SolverOutput],
+    experiment_id: str = "base",
+) -> Path:
+    """
+    Сохраняем solver-outputs в один JSON-файл:
+    <output_dir>/solver_outputs/<experiment_id>/solver_outputs.json
+    """
+    base = Path(output_dir) / "solver_outputs" / experiment_id
+    base.mkdir(parents=True, exist_ok=True)
 
-    serialized = []
-    for so in solver_outputs:
-        serialized.append(OmegaConf.to_container(so))
-
-    output_file = outp / "solver_outputs.json"
-    with open(output_file, "w", encoding="utf-8") as f:
-        import json
+    serialized = [asdict(so) for so in solver_outputs]
+    output_file = base / "solver_outputs.json"
+    with output_file.open("w", encoding="utf-8") as f:
         json.dump(serialized, f, ensure_ascii=False, indent=4)
-    
+
     logger.info(f"Saved solver outputs to {output_file}")
+    return output_file
 
 
-def save_results(output_dir: str, results: List[Results], experiment_id: str = "base"):
-    pass
+def load_solver_outputs(path: str | Path) -> List[SolverOutput]:
+    """
+    Загружаем solver-outputs из JSON, который сохранил save_solver_outputs.
+    Если path — директория, ожидаем внутри solver_outputs.json.
+    """
+    path = Path(path)
+    if path.is_dir():
+        path = path / "solver_outputs.json"
+
+    if not path.exists():
+        raise FileNotFoundError(f"Solver outputs file not found: {path}")
+
+    with path.open("r", encoding="utf-8") as f:
+        raw = json.load(f)
+
+    return [SolverOutput(**item) for item in raw]
 
 
-def eval_solver(cfg: DictConfig):
-    extract_answer_fn = get_answer_extractor_function(
-        cfg.template.extract_answer_func if cfg.template.get("use_extract_answer", False) else "base_answer_extractor"
-    )
+# =====================
+#  Solver Phase
+# =====================
 
-    problems: list[Problem] = []
-    data_dir = cfg.paths.data_dir or ""
 
-    for problem_file in cfg.data.problems_files:
-        problem_path = Path(data_dir) / problem_file
-        problems.extend(read_input_data(problem_path))
+def create_solver_inputs(
+    problems: List[Problem],
+    templates: List[str],
+) -> List[SolverInput]:
+    solver_inputs: List[SolverInput] = []
+    for template in templates:
+        for problem in problems:
+            prompt = render_solver_prompt(problem, template)
+            solver_inputs.append(
+                SolverInput(
+                    **asdict(problem),
+                    solver_template_name=template,
+                    solver_prompt=prompt,
+                )
+            )
+    return solver_inputs
 
-    templates_dir = cfg.paths.get("templates_dir", None)
 
-    solver_cfg = LLMBackendConfig(
-        **OmegaConf.to_container(cfg.solver.backend, resolve=True)
-    )
-    solver_sampling = LLMSamplingConfig(
-        **OmegaConf.to_container(cfg.solver.sampling_params, resolve=True)
-    )
+def eval_solver(
+    solver_inputs: List[SolverInput],
+    llm_host: LLMHost,
+    extract_answer_fn: Callable[[str], str],
+    backend_cfg: LLMBackendConfig,
+    sampling_cfg: LLMSamplingConfig,
+) -> List[SolverOutput]:
 
-    num_workers = 4
-    workers = [LLMHost.options(resources={"NPU": 2}).remote(solver_cfg, solver_sampling) for _ in range(num_workers)]
-    ray.get([w.start.remote() for w in workers])
-    
     solver_outputs: List[SolverOutput] = []
-    for i, problem in tqdm(enumerate(problems), desc="Generating Solutions"):
-        worker = workers[i % num_workers]
 
-        solver_prompt = render_solver_prompt(problem, cfg.template.solver_template, templates_dir)
-        solver_solution = ray.get(worker.generate.remote(solver_prompt, images=problem.images))
+    model_name = getattr(backend_cfg, "model", None)
+    temperature = getattr(sampling_cfg, "temperature", None)
+    top_p = getattr(sampling_cfg, "top_p", None)
+    top_k = getattr(sampling_cfg, "top_k", None)
+    max_tokens = getattr(sampling_cfg, "max_tokens", None)
+
+    for s_inp in tqdm(solver_inputs, desc="Generating Solutions"):
+        prompt = getattr(s_inp, "solver_prompt", None) or getattr(s_inp, "prompt", "") or ""
+        images = getattr(s_inp, "images", None) or []
+
+        solver_solution = llm_host.generate(prompt=prompt, images=images)
         solver_answer = extract_answer_fn(solver_solution)
-        solver_output = OmegaConf.merge(
-            problem, 
-            **{
-                "solver_model_name": cfg.solver.backend.vllm.model,
-                "solver_temperature": cfg.solver.sampling_params.temperature,
-                "solver_top_p": cfg.solver.sampling_params.top_p,
-                "solver_top_k": cfg.solver.sampling_params.top_k,
-                "solver_max_tokens": cfg.solver.sampling_params.max_tokens,
-                "llm_solution": solver_solution,
-                "llm_answer": solver_answer
-            }
-        )
-        solver_outputs.append(SolverOutput(**OmegaConf.to_container(solver_output)))
-    
-    # Save Results
-    if cfg.outputs.save_solver_outputs:
-        save_solver_outputs(cfg.paths.save_dir, solver_outputs, experiment_id="base")
+
+        base_dict = asdict(s_inp)
+        payload = {
+            **base_dict,
+            "solver_model_name": model_name,
+            "solver_temperature": temperature,
+            "solver_top_p": top_p,
+            "solver_top_k": top_k,
+            "solver_max_tokens": max_tokens,
+            "solver_solution": solver_solution,
+            "solver_answer": solver_answer,
+        }
+        solver_outputs.append(SolverOutput(**payload))
 
     return solver_outputs
 
 
-def eval_judger(
-    cfg: DictConfig,
-    problems: List[Problem],
+# =====================
+#  Judger Phase
+# =====================
+
+
+def create_judger_inputs(
     solver_outputs: List[SolverOutput],
-    workers: List[ray.actor.ActorHandle]
+    judger_templates: List[str],
+) -> List[JudgerInput]:
+    judger_inputs: List[JudgerInput] = []
+    for judger_template in judger_templates:
+        for solver_output in solver_outputs:
+            judger_prompt = render_judger_prompt(solver_output, judger_template)
+            judger_inputs.append(
+                JudgerInput(
+                    **asdict(solver_output),
+                    judger_template_name=judger_template,
+                    judger_prompt=judger_prompt,
+                )
+            )
+    return judger_inputs
+
+
+def eval_judger(
+    judger_inputs: List[SolverInput],
+    llm_host: LLMHost,
+    extract_answer_fn: Callable[[str], str],
+    backend_cfg: LLMBackendConfig,
+    sampling_cfg: LLMSamplingConfig,
 ):
-    pass
+
+    judger_outputs: List[JudgerOutput] = []
+
+    model_name = getattr(backend_cfg, "model", None)
+    temperature = getattr(sampling_cfg, "temperature", None)
+    top_p = getattr(sampling_cfg, "top_p", None)
+    top_k = getattr(sampling_cfg, "top_k", None)
+    max_tokens = getattr(sampling_cfg, "max_tokens", None)
+
+    for j_inp in tqdm(judger_inputs, desc="Evaluating Solutions"):
+
+        judger_prompt = getattr(j_inp, "judger_input", None) or getattr(j_inp, "judger_prompt", "") or ""
+        images = getattr(j_inp, "images", None) or []
+
+        judger_output = llm_host.generate(prompt=judger_prompt, images=images)
+        judger_assessment = extract_answer_fn(judger_output)
+
+        base_dict = asdict(j_inp)
+        payload = {
+            **base_dict,
+            "judger_model_name": model_name,
+            "judger_temperature": temperature,
+            "judger_top_p": top_p,
+            "judger_top_k": top_k,
+            "judger_max_tokens": max_tokens,
+            "judger_solution": judger_output,
+            "judger_answer": judger_assessment,
+        }
+        judger_outputs.append(JudgerOutput(**payload))
+
+    return judger_outputs
+
+
+# =====================
+#  main
+# =====================
 
 
 @hydra.main(config_path="conf", config_name="config", version_base=None)
 def main(cfg: DictConfig):
     logger.info("CriticEval Configuration:")
-    logger.info(OmegaConf.to_yaml(cfg))
-    
-    ray_init()
-    eval_solver(cfg)
-    # check_or_create_output_dir(output_dir)
+    logger.info("\n" + OmegaConf.to_yaml(cfg))
 
-    # # Load problems
-    # problems: list[Problem] = []
-    # data_dir = cfg.paths.data_dir or ""
-    # for problem_file in cfg.data.problems_files:
-    #     problem_path = Path(data_dir) / problem_file
-    #     problems.extend(read_input_data(problem_path))
+    data_dir = Path(cfg.paths.data_dir)
+    images_dir = data_dir / "images"
 
-    # templates_dir = cfg.paths.get("templates_dir", None)
+    save_dir = Path(cfg.paths.save_dir)
+    check_or_create_output_dir(save_dir)
 
-    # # Initialize solver
-    # solver_cfg = LLMBackendConfig(
-    #     **OmegaConf.to_container(cfg.solver.backend, resolve=True)
-    # )
+    def resolve(path: Optional[str]) -> Optional[Path]:
+        return data_dir / path if path else None
 
-    # solver_sampling = LLMSamplingConfig(
-    #     **OmegaConf.to_container(cfg.solver.sampling_params, resolve=True)
-    # )
-    # solver_llm = LLMHost(solver_cfg, solver_sampling)
+    problems_file = resolve(cfg.data.get("problem_file", None))
+    solver_outputs_file = resolve(cfg.data.get("solver_output_file", None))
 
-    # logger.info("Starting solver LLM host")
-    # solver_llm.start()
+    mode = cfg.evaluation.mode or "all"
+    logger.info(f"Starting evaluation in mode: {mode}")
 
-    # # Generate solutions
-    # extract_answer_fn = get_answer_extractor_function(
-    #     cfg.template.extract_answer_func if cfg.template.get("use_extract_answer", False) else "base_answer_extractor"
-    # )
+    # =====================
+    # Solver Evaluation
+    # =====================
+    solver_outputs: List[SolverOutput] = []
+    problems: List[Problem] = []
 
-    # llm_solutions: list[Solution] = []
-    # for problem in tqdm(problems, desc="Generating Solutions"):
-    #     solver_prompt = render_solver_prompt(problem, cfg.template.solver_template, templates_dir)
-    #     solution_text = solver_llm.generate(solver_prompt, images=problem.images)
-    #     answer = extract_answer_fn(solution_text)
-    #     llm_solutions.append(
-    #         Solution(solution=solution_text, answer=answer)
-    #     )
+    if mode in ("solver_only", "all"):
+        if problems_file is None:
+            raise ValueError("cfg.data.problem_file must be set for solver mode")
 
-    # solver_llm.stop()
-    # del solver_llm, solver_cfg
+        solver_cfg = cfg.solver
 
-    # # Initialize judger
-    # judger_cfg = LLMBackendConfig(
-    #     **OmegaConf.to_container(cfg.judger.backend, resolve=True)
-    # )
+        extract_answer_fn = get_answer_extractor_function(
+            cfg.template.extract_answer_func_for_solver
+            if cfg.template.get("use_extract_answer_for_solver", False)
+            else "base_answer_extractor"
+        )
 
-    # judger_sampling = LLMSamplingConfig(
-    #     **OmegaConf.to_container(cfg.judger.sampling_params, resolve=True)
-    # )
-    # judger_llm = LLMHost(judger_cfg, judger_sampling)
+        solver_templates = cfg.template.get("solver_templates", [])
 
-    # logger.info("Starting judger LLM host")
-    # judger_llm.start()
+        problems = read_input_data(problems_file, images_dir)
+        solver_inputs = create_solver_inputs(problems, solver_templates)
 
-    # # Evaluate solutions
-    # results: list[Results] = []
-    # for problem, llm_solution in tqdm(list(zip(problems, llm_solutions)), desc="Evaluating Solutions"):
-    #     judger_prompt = render_judger_prompt(problem, llm_solution, cfg.template.judger_template, templates_dir)
-    #     judger_output = judger_llm.generate(judger_prompt, images=problem.images)
-    #     judger_assesment = extract_answer_fn(judger_output)
-    #     results.append(
-    #         Results(
-    #             problem=problem,
-    #             llm_solution=llm_solution,
-    #             judger_input=judger_prompt,
-    #             judger_output=judger_output,
-    #             judger_assesment=judger_assesment
-    #         )
-    #     )
+        backend_cfg = LLMBackendConfig(
+            **OmegaConf.to_container(solver_cfg.backend, resolve=True),
+        )
+        sampling_cfg = LLMSamplingConfig(
+            **OmegaConf.to_container(solver_cfg.sampling_params, resolve=True),
+        )
+        
+        solver_llm_host = LLMHost(cfg=backend_cfg, sampling_params=sampling_cfg)
+        solver_llm_host.start()
+        try:
+            solver_outputs = eval_solver(
+                solver_inputs=solver_inputs,
+                llm_host=solver_llm_host,
+                extract_answer_fn=extract_answer_fn,
+                backend_cfg=backend_cfg,
+                sampling_cfg=sampling_cfg,
+            )
+        finally:
+            solver_llm_host.stop()
 
-    # judger_llm.stop()
+        if cfg.outputs.get("save_solver_outputs", False):
+            experiment_id = cfg.get("experiment_id", "base")
+            save_solver_outputs(save_dir, solver_outputs, experiment_id=experiment_id)
 
-    # # Save results
-    # logger.info(f"Completed evaluation of {len(results)} problems — saving to {output_dir}")
-    # save_results(output_dir, results)
+    else:
+        if solver_outputs_file is None:
+            raise ValueError(
+                "In 'judger_only' mode you must set cfg.data.solver_output_file"
+            )
+        solver_outputs = load_solver_outputs(solver_outputs_file)
+
+    # =====================
+    # Judger Evaluation
+    # =====================
+    judger_inputs: List[JudgerInput] = []
+
+    if mode in ("judger_only", "all"):
+        judger_cfg = cfg.judger
+
+        backend_cfg = LLMBackendConfig(
+            **OmegaConf.to_container(judger_cfg.backend, resolve=True),
+        )
+        sampling_cfg = LLMSamplingConfig(
+            **OmegaConf.to_container(judger_cfg.sampling_params, resolve=True),
+        )
+
+        extract_answer_fn = get_answer_extractor_function(
+            cfg.template.extract_answer_func_for_judger
+            if cfg.template.get("use_extract_answer_for_judger", False)
+            else "base_answer_extractor"
+        )
+
+        judger_templates = cfg.template.get("judger_templates", [])
+        judger_inputs = create_judger_inputs(solver_outputs, judger_templates)
+
+        judger_llm_host = LLMHost(cfg=backend_cfg, sampling_params=sampling_cfg)
+        judger_llm_host.start()
+        try:
+            judger_outputs = eval_judger(
+                judger_inputs=judger_inputs,
+                llm_host=judger_llm_host,
+                extract_answer_fn=extract_answer_fn,
+                backend_cfg=backend_cfg,
+                sampling_cfg=sampling_cfg,
+            )
+        finally:
+            judger_llm_host.stop()
+
+    # =====================
+    # Make Results
+    # =====================
+    results = [
+        {
+            "meta_info": {
+                "model_name": jo.judger_model_name,
+                "temperature": jo.judger_temperature,
+                "top_p": jo.judger_top_p,
+                "top_k": jo.judger_top_k,
+                "max_tokens": jo.judger_max_tokens
+            },
+            "problem": {
+                "meta_info": {
+                    "source": jo.source,
+                    "topic": jo.topic
+                },
+                "task": jo.task,
+                "images": jo.images,
+                "target_solution": jo.target_solution,
+                "target_answer": jo.target_answer,
+                "global_eval_criteria": jo.global_eval_criteria,
+                "task_eval_criteria": jo.task_eval_criteria
+            },
+            "solver_result": {
+                "meta_info": {
+                    "model_name": jo.solver_model_name,
+                    "temperature": jo.solver_temperature,
+                    "top_p": jo.solver_top_p,
+                    "top_k": jo.solver_top_k,
+                    "max_tokens": jo.solver_max_tokens
+                },
+                "template_name": jo.solver_template_name,
+                "prompt": jo.solver_prompt,
+                "solution": jo.solver_solution,
+                "answer": jo.solver_answer
+            },
+            "judger_result": {
+                "meta_info": {
+                    "model_name": jo.judger_model_name,
+                    "temperature": jo.judger_temperature,
+                    "top_p": jo.judger_top_p,
+                    "top_k": jo.judger_top_k,
+                    "max_tokens": jo.judger_max_tokens
+                },
+                "template_name": jo.judger_template_name,
+                "prompt": jo.judger_prompt,
+                "solution": jo.judger_solution,
+                "answer": jo.judger_answer
+            }
+        }
+        for jo in judger_outputs
+    ]
+
+    results_file = save_dir / "results.json"
+    with open(str(results_file), "w", encoding="utf-8") as f:
+        json.dump(
+            results,
+            f,
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=False
+        )
+
+    logger.info("Evaluation finished.")
 
 
 if __name__ == "__main__":

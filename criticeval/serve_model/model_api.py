@@ -1,6 +1,5 @@
 from dataclasses import dataclass, field
 from typing import Optional, Protocol, Literal, Union, Mapping, Any
-import ray
 
 
 @dataclass
@@ -24,17 +23,21 @@ class VLLMConfig:
     tokenizer: Optional[str] = None
     dtype: str = "auto"
     tensor_parallel_size: int = 1
+    num_devices: int = 1
     max_model_length: Optional[int] = None
     gpu_memory_utilization: float = 0.9
     trust_remote_code: bool = True
     enforce_eager: bool = False
     device: str = "auto"
-    backend: str = "vllm"  # vllm | vllm_npu
 
 
 @dataclass
 class LLMBackendConfig:
     backend_module: Literal["openai", "vllm", "vllm_npu"] = "vllm"
+    device: str = "cpu"
+    num_devices: int = 1
+    num_devices_per_worker: float = 1.0
+    
     vllm: VLLMConfig = field(default_factory=VLLMConfig)
     openai: OpenAIConfig = field(default_factory=OpenAIConfig)
 
@@ -55,7 +58,11 @@ class Backend(Protocol):
     def stop(self) -> None:
         pass
 
-    def generate(self, prompt: str, images: Optional[list[str]] = None):
+    def generate(
+            self,
+            prompt: str,
+            images: Optional[list[str]] = None
+        ) -> str:
         pass
 
 
@@ -66,14 +73,13 @@ def build_backend(backend_cfg: LLMBackendConfig, sampling_cfg: LLMSamplingConfig
         return VLLMBackend(backend_cfg.vllm, sampling_cfg)
 
     if backend_cfg.backend_module == "openai":
-        from .openai_backend import OpenAIChatBackend
+        from .openai_backend import OpenAIChatLLM
 
-        return OpenAIChatBackend(backend_cfg.openai, sampling_cfg)
+        return OpenAIChatLLM(backend_cfg.openai, sampling_cfg)
 
     raise ValueError(f"Unknown backend module: {backend_cfg.backend_module}")
 
 
-@ray.remote
 class LLMHost:
     def __init__(self, cfg: LLMBackendConfig, sampling_params: LLMSamplingConfig):
         self.cfg = cfg

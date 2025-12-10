@@ -5,8 +5,8 @@ from .utils import import_backend_module, detect_device, empty_cashe
 
 import vllm
 import os
-import ray
 
+from PIL import Image
 
 class VLLMBackend:
     def __init__(self, engine_cfg: VLLMConfig, sampling_cfg: LLMSamplingConfig):
@@ -19,8 +19,6 @@ class VLLMBackend:
     def start(self):
         LLM = vllm.LLM
         SamplingParamsCls = vllm.SamplingParams
-        
-        device = detect_device(self.engine_cfg.device)
 
         engine_args = {
             "model": self.engine_cfg.model,
@@ -30,8 +28,7 @@ class VLLMBackend:
             "max_model_len": self.engine_cfg.max_model_length,
             "gpu_memory_utilization": self.engine_cfg.gpu_memory_utilization,
             "trust_remote_code": self.engine_cfg.trust_remote_code,
-            "enforce_eager": self.engine_cfg.enforce_eager,
-            "device": device
+            "enforce_eager": self.engine_cfg.enforce_eager
         }
         engine_args = {k: v for k, v in engine_args.items() if v is not None}
 
@@ -54,7 +51,14 @@ class VLLMBackend:
         if self.llm is None or self.sampling_params is None:
             raise RuntimeError("vLLM backend not started. Call start() before generate().")
         if images:
-            outputs = self.llm.generate([prompt], self.sampling_params, images=images)
+            images = [Image.open(image) for image in images]
+            outputs = self.llm.generate(
+                {
+                    "prompt": prompt,
+                    "multi_modal_data": {"image": images}
+                },
+                self.sampling_params
+            )
         else:
             outputs = self.llm.generate([prompt], self.sampling_params)
         return outputs[0].outputs[0].text

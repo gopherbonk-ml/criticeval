@@ -1,12 +1,8 @@
 model_name: "Solver_Model"
 
-host: ""
-port: ""
-
 backend:
-  backend_module: "vllm"  # vllm | vllm_npu | openai
+  backend_module: "vllm"  # vllm | openai
   vllm:
-    backend: "vllm_npu"
     model: ""
     tokenizer: null
     dtype: "auto"
@@ -16,6 +12,7 @@ backend:
     trust_remote_code: true
     enforce_eager: false
     device: "auto"
+    num_devices: 1
   openai:
     model: ""
     api_key: null

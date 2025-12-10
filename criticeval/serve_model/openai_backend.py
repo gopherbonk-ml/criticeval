@@ -1,47 +1,64 @@
 import os
 from typing import List, Optional
+from openai import OpenAI
 
-from .vllm_backend import LLMBackendConfig, LLMSamplingConfig
+import json
+import requests
+import time
+from .model_api import OpenAIConfig, LLMSamplingConfig
+from dataclasses import asdict
 
 
 class OpenAIChatLLM:
-    """Minimal adapter for OpenAI-compatible /chat/completions API."""
-
-    def __init__(self, engine_cfg: LLMBackendConfig):
-        try:
-            from openai import OpenAI
-        except Exception as e:
-            raise RuntimeError("openai package is required for backend_module='openai'") from e
-
-        api_key = engine_cfg.api_key or os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise RuntimeError("OpenAI API key is required (engine.api_key or OPENAI_API_KEY)")
-
-        client_kwargs = {"api_key": api_key}
-        if engine_cfg.base_url:
-            client_kwargs["base_url"] = engine_cfg.base_url
-
-        self.client = OpenAI(**client_kwargs)
+    def __init__(self, engine_cfg: OpenAIConfig, sampling_cfg):
         self.model = engine_cfg.model
+        self.url = engine_cfg.base_url
+        self.api_key = engine_cfg.api_key
+        self.max_num_retries = 10
+        self.sampling_cfg = sampling_cfg
 
-    def start():
-        pass
+        self.client = None
 
-    def stop():
-        pass
+    def start(self):
+        self.client = OpenAI(
+            api_key=self.api_key,
+            base_url=self.url
+        )
 
-    def generate(self, prompts: List[str], sampling_params: LLMSamplingConfig, images: Optional[list[str]] = None):
-        results = []
-        for prompt in prompts:
-            try:
-                completion = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=sampling_params.temperature,
-                    top_p=sampling_params.top_p,
-                    max_tokens=sampling_params.max_tokens if sampling_params.max_tokens > 0 else None,
-                )
-            except Exception as e:
-                raise RuntimeError(f"OpenAI completion failed: {e}") from e
-            results.append(completion.choices[0].message.content)
-        return results
+    def stop(self):
+        self.client = None
+
+    @staticmethod
+    def extract_response(response):
+        return response.choices[0].message.content
+
+    def generate(self, prompt: str, images: Optional[str] = None) -> str:
+        generation_kwargs = {
+            "model": self.model,
+            "temperature": self.sampling_cfg.temperature,
+            "top_p": self.sampling_cfg.top_p,
+            "max_tokens": self.sampling_cfg.max_tokens,
+        }
+
+        user_content = [
+            {"type": "text", "text": prompt},
+        ]
+
+        if images:
+            user_content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": images},
+                }
+            )
+
+        response = self.client.chat.completions.create(
+            messages=[
+                {"role": "user", "content": user_content},
+            ],
+            **generation_kwargs,
+        )
+
+        # см. ниже про extract_response
+        output = self.extract_response(response)
+        return output

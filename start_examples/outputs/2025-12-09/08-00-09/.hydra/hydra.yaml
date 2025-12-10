@@ -1,0 +1,200 @@
+hydra:
+  run:
+    dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  sweep:
+    dir: multirun/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    subdir: ${hydra.job.num}
+  launcher:
+    _target_: hydra._internal.core_plugins.basic_launcher.BasicLauncher
+  sweeper:
+    _target_: hydra._internal.core_plugins.basic_sweeper.BasicSweeper
+    max_batch_size: null
+    params: null
+  help:
+    app_name: ${hydra.job.name}
+    header: '${hydra.help.app_name} is powered by Hydra.
+
+      '
+    footer: 'Powered by Hydra (https://hydra.cc)
+
+      Use --hydra-help to view Hydra specific help
+
+      '
+    template: '${hydra.help.header}
+
+      == Configuration groups ==
+
+      Compose your configuration from those groups (group=option)
+
+
+      $APP_CONFIG_GROUPS
+
+
+      == Config ==
+
+      Override anything in the config (foo.bar=value)
+
+
+      $CONFIG
+
+
+      ${hydra.help.footer}
+
+      '
+  hydra_help:
+    template: 'Hydra (${hydra.runtime.version})
+
+      See https://hydra.cc for more info.
+
+
+      == Flags ==
+
+      $FLAGS_HELP
+
+
+      == Configuration groups ==
+
+      Compose your configuration from those groups (For example, append hydra/job_logging=disabled
+      to command line)
+
+
+      $HYDRA_CONFIG_GROUPS
+
+
+      Use ''--cfg hydra'' to Show the Hydra config.
+
+      '
+    hydra_help: ???
+  hydra_logging:
+    version: 1
+    formatters:
+      simple:
+        format: '[%(asctime)s][HYDRA] %(message)s'
+    handlers:
+      console:
+        class: logging.StreamHandler
+        formatter: simple
+        stream: ext://sys.stdout
+    root:
+      level: INFO
+      handlers:
+      - console
+    loggers:
+      logging_example:
+        level: DEBUG
+    disable_existing_loggers: false
+  job_logging:
+    version: 1
+    formatters:
+      simple:
+        format: '[%(asctime)s][%(name)s][%(levelname)s] - %(message)s'
+    handlers:
+      console:
+        class: logging.StreamHandler
+        formatter: simple
+        stream: ext://sys.stdout
+      file:
+        class: logging.FileHandler
+        formatter: simple
+        filename: ${hydra.runtime.output_dir}/${hydra.job.name}.log
+    root:
+      level: INFO
+      handlers:
+      - console
+      - file
+    disable_existing_loggers: false
+  env: {}
+  mode: RUN
+  searchpath: []
+  callbacks: {}
+  output_subdir: .hydra
+  overrides:
+    hydra:
+    - hydra.mode=RUN
+    task:
+    - evaluation.mode=all
+    - paths.data_dir=data
+    - paths.save_dir=outputs
+    - data.problem_file=problems_example.csv
+    - outputs.experiment_id=example_run
+    - outputs.save_solver_outputs=True
+    - template.solver_templates=[base_solver]
+    - template.judger_templates=[base_judger]
+    - template.use_extract_answer_for_solver=True
+    - template.use_extract_answer_for_judger=True
+    - template.extract_answer_func_for_solver=boxed_answer_extractor
+    - template.extract_answer_func_for_judger=boxed_answer_extractor
+    - solver.backend.backend_module=vllm
+    - solver.backend.device=npu
+    - solver.backend.num_workers=8
+    - solver.backend.num_device_per_worker=2
+    - solver.backend.vllm.backend=vllm_npu
+    - solver.backend.device=npu
+    - solver.backend.num_workers=8
+    - solver.backend.num_device_per_worker=4
+    - solver.backend.vllm.model=/workspace/local/models/Qwen2.5-VL-3B-Instruct
+    - solver.backend.vllm.dtype=auto
+    - solver.backend.vllm.device=npu
+    - solver.backend.vllm.tensor_parallel_size=2
+    - solver.backend.vllm.max_model_length=8192
+    - solver.backend.vllm.gpu_memory_utilization=0.6
+    - solver.backend.vllm.trust_remote_code=True
+    - solver.backend.vllm.enforce_eager=True
+    - solver.sampling_params.temperature=0
+    - solver.sampling_params.max_tokens=4096
+    - solver.sampling_params.top_p=0.9
+    - judger.backend.backend_module=vllm
+    - judger.backend.vllm.backend=vllm_npu
+    - judger.backend.vllm.model=/workspace/local/models/Qwen2.5-VL-3B-Instruct
+    - judger.backend.vllm.dtype=auto
+    - judger.backend.vllm.device=npu
+    - judger.backend.vllm.tensor_parallel_size=4
+    - judger.backend.vllm.max_model_length=8192
+    - judger.backend.vllm.gpu_memory_utilization=0.6
+    - judger.backend.vllm.trust_remote_code=True
+    - judger.backend.vllm.enforce_eager=True
+    - judger.sampling_params.temperature=0.6
+    - judger.sampling_params.max_tokens=4096
+    - judger.sampling_params.top_p=0.9
+  job:
+    name: eval
+    chdir: null
+    override_dirname: data.problem_file=problems_example.csv,evaluation.mode=all,judger.backend.backend_module=vllm,judger.backend.vllm.backend=vllm_npu,judger.backend.vllm.device=npu,judger.backend.vllm.dtype=auto,judger.backend.vllm.enforce_eager=True,judger.backend.vllm.gpu_memory_utilization=0.6,judger.backend.vllm.max_model_length=8192,judger.backend.vllm.model=/workspace/local/models/Qwen2.5-VL-3B-Instruct,judger.backend.vllm.tensor_parallel_size=4,judger.backend.vllm.trust_remote_code=True,judger.sampling_params.max_tokens=4096,judger.sampling_params.temperature=0.6,judger.sampling_params.top_p=0.9,outputs.experiment_id=example_run,outputs.save_solver_outputs=True,paths.data_dir=data,paths.save_dir=outputs,solver.backend.backend_module=vllm,solver.backend.device=npu,solver.backend.device=npu,solver.backend.num_device_per_worker=2,solver.backend.num_device_per_worker=4,solver.backend.num_workers=8,solver.backend.num_workers=8,solver.backend.vllm.backend=vllm_npu,solver.backend.vllm.device=npu,solver.backend.vllm.dtype=auto,solver.backend.vllm.enforce_eager=True,solver.backend.vllm.gpu_memory_utilization=0.6,solver.backend.vllm.max_model_length=8192,solver.backend.vllm.model=/workspace/local/models/Qwen2.5-VL-3B-Instruct,solver.backend.vllm.tensor_parallel_size=2,solver.backend.vllm.trust_remote_code=True,solver.sampling_params.max_tokens=4096,solver.sampling_params.temperature=0,solver.sampling_params.top_p=0.9,template.extract_answer_func_for_judger=boxed_answer_extractor,template.extract_answer_func_for_solver=boxed_answer_extractor,template.judger_templates=[base_judger],template.solver_templates=[base_solver],template.use_extract_answer_for_judger=True,template.use_extract_answer_for_solver=True
+    id: ???
+    num: ???
+    config_name: config
+    env_set: {}
+    env_copy: []
+    config:
+      override_dirname:
+        kv_sep: '='
+        item_sep: ','
+        exclude_keys: []
+  runtime:
+    version: 1.3.2
+    version_base: '1.3'
+    cwd: /workspace/local/repos/criticeval/start_examples
+    config_sources:
+    - path: hydra.conf
+      schema: pkg
+      provider: hydra
+    - path: /workspace/local/repos/criticeval/criticeval/conf
+      schema: file
+      provider: main
+    - path: ''
+      schema: structured
+      provider: schema
+    output_dir: /workspace/local/repos/criticeval/start_examples/outputs/2025-12-09/08-00-09
+    choices:
+      solver: solver
+      judger: judger
+      hydra/env: default
+      hydra/callbacks: null
+      hydra/job_logging: default
+      hydra/hydra_logging: default
+      hydra/hydra_help: default
+      hydra/help: default
+      hydra/sweeper: basic
+      hydra/launcher: basic
+      hydra/output: default
+  verbose: false
