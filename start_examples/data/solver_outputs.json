@@ -2,7 +2,6 @@
     {
         "source": null,
         "topic": null,
-        "difficulty": null,
         "task": "What is 2+2?",
         "images": [],
         "target_solution": "Compute 2+2=4",
