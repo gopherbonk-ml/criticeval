@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
-export ASCEND_RT_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 export HYDRA_FULL_ERROR=1
-export VLLM_LOGGING_LEVEL=DEBUG
-export ASCEND_LAUNCH_BLOCKING=1
 
 
 python -m criticeval.eval \
@@ -12,8 +9,7 @@ python -m criticeval.eval \
   data.solver_output_file="solver_outputs.json" \
   outputs.experiment_id="example_run" \
   template.judger_templates=["base_judger"] \
-  template.use_extract_answer_for_judger=True \
-  template.extract_answer_func_for_judger="boxed_answer_extractor" \
+  template.extract_field_func_for_judger="boxed_answer_extractor" \
   judger.backend.backend_module="openai" \
   judger.backend.openai.model="qwen3vl" \
   judger.backend.openai.api_key="EMPTY" \

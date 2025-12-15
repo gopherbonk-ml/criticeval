@@ -45,16 +45,7 @@ def read_input_data(
         if images:
             sample["images"] = [images_dir / image for image in images]
 
-        problems.append(Problem(
-            source=sample.get("source", None),
-            topic=sample.get("topic", None),
-            task=sample.get("task", None),
-            images=sample.get("images", None),
-            target_solution=sample.get("target_solution", None),
-            target_answer=sample.get("target_answer", None),
-            global_eval_criteria=sample.get("global_eval_criteria", None),
-            task_eval_criteria=sample.get("task_eval_criteria", None),
-        ))
+        problems.append(Problem.from_dict(sample))
 
     return problems
 
