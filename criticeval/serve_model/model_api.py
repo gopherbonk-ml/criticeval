@@ -65,6 +65,13 @@ class Backend(Protocol):
         ) -> str:
         pass
 
+    def generate_many(
+        self,
+        prompts: list[str],
+        images: Optional[list[Optional[list[str]]]] = None
+    ) -> list[str]:
+        pass
+
 
 def build_backend(backend_cfg: LLMBackendConfig, sampling_cfg: LLMSamplingConfig):
     if backend_cfg.backend_module in ("vllm", "vllm_npu"):
@@ -99,3 +106,28 @@ class LLMHost:
         if self.backend is None:
             raise RuntimeError("LLM host not started. Call start() before generate().")
         return self.backend.generate(prompt, images=images)
+
+    def generate_many(
+        self,
+        prompts: list[str],
+        images: Optional[list[Optional[list[str]]]] = None
+    ) -> list[str]:
+        results: list[str] = []
+
+        if self.backend is None:
+            raise RuntimeError("LLM host not started. Call start() before many_generate().")
+
+        generate_many = getattr(self.backend, "generate_many", None)
+        if callable(generate_many):
+            results = generate_many(prompts, images=images)
+            return results
+
+        for prompt, imgs in zip(prompts, imgs):
+            results.append(
+                self.backend.generate(
+                    prompt, images=imgs
+                )
+            )
+        return results
+
+        

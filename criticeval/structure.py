@@ -1,9 +1,26 @@
-from dataclasses import dataclass, field
-from typing import Optional, List
+from dataclasses import dataclass, field, fields
+from typing import Any, Mapping, Optional, List, Dict, TypeVar, Type
+
+
+T = TypeVar("T", bound="ExtraKwargsMixin")
 
 
 @dataclass
-class Problem:
+class ExtraKwargsMixin:
+    _extra: Dict[str, Any] = field(default_factory=dict, repr=False)
+
+    @classmethod
+    def from_dict(cls: Type[T], data: Mapping[str, Any], *, keep_extra: bool = True) -> T:
+        allowed = {f.name for f in fields(cls)}
+        known = {k: v for k, v in data.items() if k in allowed}
+        obj = cls(**known)
+        if keep_extra:
+            obj._extra.update({k: v for k, v in data.items() if k not in allowed})
+        return obj
+
+
+@dataclass
+class Problem(ExtraKwargsMixin):
     # Meta Problem Info
     source: Optional[str] = None
     topic: Optional[str] = None
@@ -37,7 +54,7 @@ class SolverOutput(SolverInput):
 
     # LLM Solution
     solver_solution: str = ""
-    solver_answer: str = ""
+    solver_extracted_fields: Optional[Dict[str, str]] = field(default_factory=dict)
 
 
 @dataclass
@@ -56,4 +73,4 @@ class JudgerOutput(JudgerInput):
     judger_max_tokens: Optional[int] = None
 
     judger_solution: str = ""
-    judger_answer: str = ""
+    judger_extracted_fields: Optional[Dict[str, str]] = field(default_factory=dict)

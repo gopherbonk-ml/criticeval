@@ -21,8 +21,6 @@ outputs:
 template:
   solver_templates: ["base_solver"]
   judger_templates: ["base_judger"]
-  use_extract_answer_for_solver: true
-  use_extract_answer_for_judger: true
-  extract_answer_func_for_solver: "boxed_answer_extractor"
-  extract_answer_func_for_judger: "boxed_answer_extractor"
+  extract_field_func_for_solver: "nothing"
+  extract_field_func_for_judger: "nothing"
   use_images_for_judger: True

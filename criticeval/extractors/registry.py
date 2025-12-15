@@ -17,7 +17,7 @@ def get_available_answer_extractor_function():
     return ', '.join(REGISTRY.keys())
 
 
-def get_answer_extractor_function(name: str):
+def get_field_extractor_function(name: str):
     try:
         extractor = REGISTRY[name]
     except KeyError:

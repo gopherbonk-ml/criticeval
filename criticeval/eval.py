@@ -20,7 +20,7 @@ from .serve_model.model_api import (
     LLMBackendConfig,
     LLMSamplingConfig,
 )
-from .extractors import get_answer_extractor_function
+from .extractors import get_field_extractor_function
 from .utils import read_input_data, check_or_create_output_dir
 
 
@@ -55,10 +55,6 @@ def save_solver_outputs(
 
 
 def load_solver_outputs(path: str | Path) -> List[SolverOutput]:
-    """
-    Загружаем solver-outputs из JSON, который сохранил save_solver_outputs.
-    Если path — директория, ожидаем внутри solver_outputs.json.
-    """
     path = Path(path)
     if path.is_dir():
         path = path / "solver_outputs.json"
@@ -69,7 +65,7 @@ def load_solver_outputs(path: str | Path) -> List[SolverOutput]:
     with path.open("r", encoding="utf-8") as f:
         raw = json.load(f)
 
-    return [SolverOutput(**item) for item in raw]
+    return [SolverOutput.from_dict(item) for item in raw]
 
 
 # =====================
@@ -86,11 +82,11 @@ def create_solver_inputs(
         for problem in problems:
             prompt = render_solver_prompt(problem, template)
             solver_inputs.append(
-                SolverInput(
+                SolverInput.from_dict({
                     **asdict(problem),
-                    solver_template_name=template,
-                    solver_prompt=prompt,
-                )
+                    "solver_template_name": template,
+                    "solver_prompt": prompt,
+                })
             )
     return solver_inputs
 
@@ -98,7 +94,7 @@ def create_solver_inputs(
 def eval_solver(
     solver_inputs: List[SolverInput],
     llm_host: LLMHost,
-    extract_answer_fn: Callable[[str], str],
+    extract_field_fn: Callable[[str], str],
     backend_cfg: LLMBackendConfig,
     sampling_cfg: LLMSamplingConfig,
 ) -> List[SolverOutput]:
@@ -111,12 +107,23 @@ def eval_solver(
     top_k = getattr(sampling_cfg, "top_k", None)
     max_tokens = getattr(sampling_cfg, "max_tokens", None)
 
-    for s_inp in tqdm(solver_inputs, desc="Generating Solutions"):
-        prompt = getattr(s_inp, "solver_prompt", None) or getattr(s_inp, "prompt", "") or ""
-        images = getattr(s_inp, "images", None) or []
+    prompts = [
+        getattr(s, "solver_prompt", None)
+        for s in solver_prompts
+    ]
 
-        solver_solution = llm_host.generate(prompt=prompt, images=images)
-        solver_answer = extract_answer_fn(solver_solution)
+    images_list = [
+        getattr(s, "images", None)
+        for s in solver_prompts
+    ]
+
+    solver_solutions = llm_host.generate_many(
+        prompts,
+        images=images_list
+    )
+
+    for s_inp, solver_solution in zip(solver_inputs, solver_solutions):
+        extracted_fields = extract_field_fn(solver_solution)
 
         base_dict = asdict(s_inp)
         payload = {
@@ -127,9 +134,9 @@ def eval_solver(
             "solver_top_k": top_k,
             "solver_max_tokens": max_tokens,
             "solver_solution": solver_solution,
-            "solver_answer": solver_answer,
+            "solver_extracted_fields": extracted_fields
         }
-        solver_outputs.append(SolverOutput(**payload))
+        solver_outputs.append(SolverOutput.from_dict(payload))
 
     return solver_outputs
 
@@ -148,11 +155,11 @@ def create_judger_inputs(
         for solver_output in solver_outputs:
             judger_prompt = render_judger_prompt(solver_output, judger_template)
             judger_inputs.append(
-                JudgerInput(
+                JudgerInput.from_dict({
                     **asdict(solver_output),
-                    judger_template_name=judger_template,
-                    judger_prompt=judger_prompt,
-                )
+                    "judger_template_name": judger_template,
+                    "judger_prompt": judger_prompt,
+                })
             )
     return judger_inputs
 
@@ -160,7 +167,7 @@ def create_judger_inputs(
 def eval_judger(
     judger_inputs: List[SolverInput],
     llm_host: LLMHost,
-    extract_answer_fn: Callable[[str], str],
+    extract_field_fn: Callable[[str], str],
     backend_cfg: LLMBackendConfig,
     sampling_cfg: LLMSamplingConfig,
 ):
@@ -173,13 +180,23 @@ def eval_judger(
     top_k = getattr(sampling_cfg, "top_k", None)
     max_tokens = getattr(sampling_cfg, "max_tokens", None)
 
-    for j_inp in tqdm(judger_inputs, desc="Evaluating Solutions"):
+    prompts = [
+        getattr(j, "judger_prompt", None)
+        for j in judger_inputs
+    ]
 
-        judger_prompt = getattr(j_inp, "judger_input", None) or getattr(j_inp, "judger_prompt", "") or ""
-        images = getattr(j_inp, "images", None) or []
+    images_list = [
+        getattr(j, "images", None)
+        for j in judger_inputs
+    ]
 
-        judger_output = llm_host.generate(prompt=judger_prompt, images=images)
-        judger_assessment = extract_answer_fn(judger_output)
+    judger_solutions = llm_host.generate_many(
+        prompts,
+        images=images_list
+    )
+
+    for j_inp, judger_solution in zip(judger_inputs, judger_solutions):
+        extracted_fields = extract_field_fn(judger_solution)
 
         base_dict = asdict(j_inp)
         payload = {
@@ -189,8 +206,8 @@ def eval_judger(
             "judger_top_p": top_p,
             "judger_top_k": top_k,
             "judger_max_tokens": max_tokens,
-            "judger_solution": judger_output,
-            "judger_answer": judger_assessment,
+            "judger_solution": judger_solution,
+            "judger_extracted_fields": extracted_fields
         }
         judger_outputs.append(JudgerOutput(**payload))
 
@@ -222,9 +239,11 @@ def main(cfg: DictConfig):
     mode = cfg.evaluation.mode or "all"
     logger.info(f"Starting evaluation in mode: {mode}")
 
+
     # =====================
     # Solver Evaluation
     # =====================
+    
     solver_outputs: List[SolverOutput] = []
     problems: List[Problem] = []
 
@@ -234,10 +253,8 @@ def main(cfg: DictConfig):
 
         solver_cfg = cfg.solver
 
-        extract_answer_fn = get_answer_extractor_function(
-            cfg.template.extract_answer_func_for_solver
-            if cfg.template.get("use_extract_answer_for_solver", False)
-            else "base_answer_extractor"
+        extract_field_fn = get_field_extractor_function(
+            cfg.template.extract_field_func_for_solver
         )
 
         solver_templates = cfg.template.get("solver_templates", [])
@@ -258,7 +275,7 @@ def main(cfg: DictConfig):
             solver_outputs = eval_solver(
                 solver_inputs=solver_inputs,
                 llm_host=solver_llm_host,
-                extract_answer_fn=extract_answer_fn,
+                extract_field_fn=extract_field_fn,
                 backend_cfg=backend_cfg,
                 sampling_cfg=sampling_cfg,
             )
@@ -291,10 +308,8 @@ def main(cfg: DictConfig):
             **OmegaConf.to_container(judger_cfg.sampling_params, resolve=True),
         )
 
-        extract_answer_fn = get_answer_extractor_function(
-            cfg.template.extract_answer_func_for_judger
-            if cfg.template.get("use_extract_answer_for_judger", False)
-            else "base_answer_extractor"
+        extract_field_fn = get_field_extractor_function(
+            cfg.template.extract_field_func_for_judger
         )
 
         judger_templates = cfg.template.get("judger_templates", [])
@@ -306,7 +321,7 @@ def main(cfg: DictConfig):
             judger_outputs = eval_judger(
                 judger_inputs=judger_inputs,
                 llm_host=judger_llm_host,
-                extract_answer_fn=extract_answer_fn,
+                extract_field_fn=extract_field_fn,
                 backend_cfg=backend_cfg,
                 sampling_cfg=sampling_cfg,
             )
@@ -348,7 +363,7 @@ def main(cfg: DictConfig):
                 "template_name": jo.solver_template_name,
                 "prompt": jo.solver_prompt,
                 "solution": jo.solver_solution,
-                "answer": jo.solver_answer
+                "extracted_fields": jo.solver_extracted_fields
             },
             "judger_result": {
                 "meta_info": {
@@ -361,7 +376,10 @@ def main(cfg: DictConfig):
                 "template_name": jo.judger_template_name,
                 "prompt": jo.judger_prompt,
                 "solution": jo.judger_solution,
-                "answer": jo.judger_answer
+                "extracted_fields": jo.judger_extracted_fields
+            },
+            "extra_kwargs": {
+                **jo._extra
             }
         }
         for jo in judger_outputs
