@@ -1,8 +1,8 @@
 # Examples of Usage
 
-### Data Prepare (evaluation.mode="all")
+### Data Prepare (`evaluation.mode="all"`)
 
-### Data Prepare (evaluation.mode="judger_only")
+### Data Prepare (`evaluation.mode="judger_only"`)
 
 ### Example №1
 
