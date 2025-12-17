@@ -1,3 +1,21 @@
+# Examples of Usage
+
+### Data Prepare (evaluation.mode="all")
+
+### Data Prepare (evaluation.mode="judger_only")
+
+### Example №1
+
+- `start_examples/start_example1.sh`
+
+### Example №2
+
+- `start_examples/start_example2.sh`
+
+### Example №3
+
+- `start_examples/start_example3.sh`
+
 # Essence
 
 ## 1 Templates
@@ -24,8 +42,6 @@ In practice, this means that your template variables should correspond to fields
 ### Selecting templates via config
 
 Template selection is controlled via the config:
-
-The choice of template is specified in the config parameters: 
 
 ```yaml
 template:
@@ -57,32 +73,18 @@ def nothing_extractor(response: str) -> dict:
 
 #### Selecting extractors via config
 
+Extractor selection is controlled via the config:
+
+```yaml
+template:
+  extract_field_func_for_solver: "nothing"
+  extract_field_func_for_judger: "nothing"
+```
 
 
-3. Input Data:
+3. Input&Output Data:
 
 
-
-
-
-
-
-EXAMPLES:
-
-Basic Example 1:
-
-Solver (vllm-npu) and Judger (vllm-npu)
-
-Basic Example 2:
-
-Solver (vllm-npu) and Judger (API)
-
-Basic Example 3:
-
-ONLY Judger (API) with Solver Output (data.data_dir / data.solver_output_file).
-Result will be save in
-
-Basic Example 4:
 
 
 
