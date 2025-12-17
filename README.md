@@ -1,42 +1,66 @@
-**Essence**:
+## Essence
 
-1. Template Set:
+### 1 Templates
 
-criticeval/templates/templates contains a set of templates.
+CriticEval uses Jinja2 templates to render prompts for both the solver and the judger.
 
-When creating your template, the structures used to render it will be useful.
+#### 1.1 Where templates live
 
-The **SolverInput** structure is used to render the prompt for the solver.
-The **JudgerInput** structure is used to render the prompt for the judger.
+All built-in templates are stored in:
 
+- `criticeval/templates/templates/`
+
+When you add a new template, place it in the same directory (and follow the conventions used by the existing ones).
+
+#### 1.2 Rendering inputs
+
+Templates are rendered using typed input structures:
+
+- **`SolverInput`** — the data structure used to render the solver prompt.
+- **`JudgerInput`** — the data structure used to render the judger prompt.
+
+In practice, this means that your template variables should correspond to fields available on these structures (and any additional context the framework injects at render time).
+
+#### 1.3 Selecting templates via config
+
+Template selection is controlled via the config:
 
 The choice of template is specified in the config parameters: 
 
-- template.solver_templates=["base_solver"]
-- template.judger_templates=["base_judger"]
-
-It is possible to set several templates for evaluation at once.
-
-2. Extractors Registry
-
-Available functions for response extraction are available in criticeval/extractors/extractors.py
-
-You can register your own function for extract using decorator:
-
-```
-@register(name="base_answer_extractor")
-def base_answer_extractor(response):
-    return response
+```yaml
+template:
+  solver_templates: ["base_solver"]
+  judger_templates: ["base_judger"]
 ```
 
-The selection and use of the function for the extract is determined by the parameters:
+### 2 Extractors Registry
 
-- template.use_extract_answer_for_solver=True 
-- template.extract_answer_func_for_solver="boxed_answer_extractor"
-- template.use_extract_answer_for_judger=True 
-- template.extract_answer_func_for_judger="boxed_answer_extractor"
+CriticEval supports extracting structured fields from LLM responses (both solver and judger). These extracted fields are then persisted in output objects and can be reused downstream (e.g., solver-extracted fields can be injected into the judger prompt).
+
+#### 2.1 Where extractors live
+
+Built-in extractor functions are defined in:
+
+- `criticeval/extractors/extractors.py`
+
+#### 2.2 Registering a custom extractor
+
+To add your own extraction logic, define a function that accepts the raw model response (`str`) and returns a `dict` of extracted fields. Then register it with the extractor registry:
+
+```python
+from criticeval.extractors import register
+
+@register(name="nothing")
+def nothing_extractor(response: str) -> dict:
+    return {}
+```
+
+#### 2.3 Selecting extractors via config
+
+
 
 3. Input Data:
+
 
 
 
