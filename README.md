@@ -1,10 +1,10 @@
-## Essence
+# Essence
 
-### 1 Templates
+## 1 Templates
 
 CriticEval uses Jinja2 templates to render prompts for both the solver and the judger.
 
-#### 1.1 Where templates live
+### Where templates live
 
 All built-in templates are stored in:
 
@@ -12,7 +12,7 @@ All built-in templates are stored in:
 
 When you add a new template, place it in the same directory (and follow the conventions used by the existing ones).
 
-#### 1.2 Rendering inputs
+### Rendering inputs
 
 Templates are rendered using typed input structures:
 
@@ -21,7 +21,7 @@ Templates are rendered using typed input structures:
 
 In practice, this means that your template variables should correspond to fields available on these structures (and any additional context the framework injects at render time).
 
-#### 1.3 Selecting templates via config
+### Selecting templates via config
 
 Template selection is controlled via the config:
 
@@ -33,17 +33,17 @@ template:
   judger_templates: ["base_judger"]
 ```
 
-### 2 Extractors Registry
+## 2 Extractors Registry
 
 CriticEval supports extracting structured fields from LLM responses (both solver and judger). These extracted fields are then persisted in output objects and can be reused downstream (e.g., solver-extracted fields can be injected into the judger prompt).
 
-#### 2.1 Where extractors live
+#### Where extractors live
 
 Built-in extractor functions are defined in:
 
 - `criticeval/extractors/extractors.py`
 
-#### 2.2 Registering a custom extractor
+#### Registering a custom extractor
 
 To add your own extraction logic, define a function that accepts the raw model response (`str`) and returns a `dict` of extracted fields. Then register it with the extractor registry:
 
@@ -55,7 +55,7 @@ def nothing_extractor(response: str) -> dict:
     return {}
 ```
 
-#### 2.3 Selecting extractors via config
+#### Selecting extractors via config
 
 
 
